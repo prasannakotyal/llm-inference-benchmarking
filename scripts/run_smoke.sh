@@ -13,4 +13,5 @@ uv run python -m llm_benchmark.benchmark \
   --concurrencies 1 \
   --output-pattern 2 \
   --warmup \
-  --output results/smoke/smoke.jsonl
+  --output results/smoke/smoke.jsonl \
+  --trace-output results/smoke/request_traces.jsonl

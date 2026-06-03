@@ -10,8 +10,7 @@ The project compares two real PyTorch execution paths:
   slots open, following the scheduling shape used by vLLM and SGLang-style
   continuous batching. It does not use vLLM or SGLang custom kernels.
 
-Recorded RunPod results are included in `results/runpod` and plotted under
-`assets/runpod`.
+Recorded RunPod results are included in `results/` and plotted under `assets/`.
 
 ## Install
 
@@ -35,8 +34,14 @@ PyTorch `2.12.0+cu130`.
 ./scripts/run_runpod_suite.sh
 ```
 
-The suite runs `Qwen/Qwen2.5-0.5B-Instruct` with synthetic token prompts so
-prompt lengths are exact and repeatable.
+Larger model suite:
+
+```bash
+./scripts/run_runpod_qwen_1_5b_suite.sh
+```
+
+The suites use synthetic token prompts so prompt lengths are exact and
+repeatable.
 
 ## Benchmark Setup
 
@@ -47,7 +52,7 @@ Results below are generated on RunPod with:
 - CUDA runtime reported by PyTorch: 13.0
 - PyTorch: `2.12.0+cu130`
 - Transformers: `5.10.1`
-- Model: `Qwen/Qwen2.5-0.5B-Instruct`
+- Models: `Qwen/Qwen2.5-0.5B-Instruct`, `Qwen/Qwen2.5-1.5B-Instruct`
 - Precision: FP16
 - Prompt lengths: 64, 256, 512 tokens
 - Max batch sizes: 1, 4, 8
@@ -61,36 +66,53 @@ keeps prompt length exact and makes the run independent of tokenizer quirks.
 
 Full results:
 
-- JSONL: `results/runpod/benchmark_results.jsonl`
-- CSV: `results/runpod/benchmark_results.csv`
-- Markdown table: `results/runpod/summary.md`
+- Qwen2.5-0.5B: `results/runpod`
+- Qwen2.5-1.5B: `results/runpod_qwen_1_5b`
 
-Representative rows:
+Each result directory contains:
+
+- `benchmark_results.jsonl`
+- `benchmark_results.csv`
+- `summary.md`
+- `request_traces.jsonl`
+- `prometheus_metrics.prom`
+
+Representative Qwen2.5-0.5B rows:
 
 | Prompt | Batch | Concurrency | Backend | Tokens/sec | Mean TTFT | Mean ITL | Peak memory | KV/request |
 |---:|---:|---:|---|---:|---:|---:|---:|---:|
-| 64 | 1 | 16 | hf-static | 51.5 | 3,437.7 ms | 19.4 ms | 1,017 MB | 1.11 MB |
-| 64 | 1 | 16 | continuous | 50.4 | 3,467.2 ms | 19.8 ms | 1,017 MB | 1.11 MB |
-| 64 | 8 | 8 | hf-static | 289.1 | 21.8 ms | 20.7 ms | 1,137 MB | 1.11 MB |
-| 64 | 8 | 8 | continuous | 292.7 | 21.4 ms | 20.5 ms | 1,137 MB | 1.11 MB |
-| 64 | 8 | 16 | hf-static | 289.2 | 351.3 ms | 20.7 ms | 1,146 MB | 1.11 MB |
-| 64 | 8 | 16 | continuous | 147.5 | 358.3 ms | 40.2 ms | 1,137 MB | 1.11 MB |
-| 256 | 4 | 4 | hf-static | 143.9 | 22.5 ms | 20.8 ms | 1,293 MB | 3.36 MB |
-| 256 | 4 | 4 | continuous | 146.5 | 21.8 ms | 20.5 ms | 1,293 MB | 3.36 MB |
-| 256 | 8 | 8 | hf-static | 280.0 | 23.4 ms | 21.4 ms | 1,604 MB | 3.36 MB |
-| 256 | 8 | 8 | continuous | 285.7 | 23.4 ms | 21.1 ms | 1,604 MB | 3.36 MB |
-| 512 | 8 | 16 | hf-static | 279.0 | 368.3 ms | 21.6 ms | 2,278 MB | 6.36 MB |
-| 512 | 8 | 16 | continuous | 146.4 | 367.0 ms | 40.5 ms | 2,225 MB | 6.36 MB |
+| 64 | 1 | 16 | hf-static | 50.6 | 3,498.6 ms | 19.8 ms | 1,017 MB | 1.11 MB |
+| 64 | 1 | 16 | continuous | 47.5 | 3,779.6 ms | 21.0 ms | 1,017 MB | 1.11 MB |
+| 64 | 8 | 8 | hf-static | 281.8 | 23.0 ms | 21.3 ms | 1,137 MB | 1.11 MB |
+| 64 | 8 | 8 | continuous | 284.7 | 21.8 ms | 21.1 ms | 1,137 MB | 1.11 MB |
+| 64 | 8 | 16 | hf-static | 283.1 | 357.0 ms | 21.1 ms | 1,146 MB | 1.11 MB |
+| 64 | 8 | 16 | continuous | 147.9 | 355.9 ms | 40.1 ms | 1,137 MB | 1.11 MB |
+| 256 | 4 | 4 | hf-static | 144.1 | 22.5 ms | 20.8 ms | 1,293 MB | 3.36 MB |
+| 256 | 4 | 4 | continuous | 145.3 | 21.9 ms | 20.7 ms | 1,293 MB | 3.36 MB |
+| 256 | 8 | 8 | hf-static | 277.7 | 23.9 ms | 21.6 ms | 1,604 MB | 3.36 MB |
+| 256 | 8 | 8 | continuous | 281.3 | 23.8 ms | 21.4 ms | 1,604 MB | 3.36 MB |
+| 512 | 8 | 16 | hf-static | 275.9 | 371.8 ms | 21.8 ms | 2,278 MB | 6.36 MB |
+| 512 | 8 | 16 | continuous | 145.1 | 369.6 ms | 40.8 ms | 2,225 MB | 6.36 MB |
 
-Measured range across all 54 workloads:
+Representative Qwen2.5-1.5B rows:
 
-- Throughput: 46.3 to 292.7 generated tokens/sec
-- Mean TTFT: 20.3 to 3,527.3 ms
-- Mean inter-token latency: 19.4 to 51.7 ms
-- Peak allocated GPU memory: 1,005 to 2,278 MB
-- Max KV cache per request: 1.11 to 6.36 MB
+| Prompt | Batch | Concurrency | Backend | Tokens/sec | Mean TTFT | Mean ITL | Peak memory | KV/request |
+|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 64 | 8 | 8 | hf-static | 241.2 | 24.2 ms | 24.9 ms | 3,141 MB | 2.60 MB |
+| 64 | 8 | 8 | continuous | 248.0 | 24.1 ms | 24.4 ms | 3,141 MB | 2.60 MB |
+| 256 | 8 | 8 | hf-static | 233.3 | 31.3 ms | 25.8 ms | 3,633 MB | 7.85 MB |
+| 256 | 8 | 8 | continuous | 235.4 | 30.5 ms | 25.7 ms | 3,633 MB | 7.85 MB |
+| 512 | 8 | 16 | hf-static | 211.1 | 480.5 ms | 29.8 ms | 4,409 MB | 14.85 MB |
+| 512 | 8 | 16 | continuous | 120.7 | 484.4 ms | 50.0 ms | 4,289 MB | 14.85 MB |
 
-## Plots
+Measured ranges:
+
+| Model | Throughput | Mean TTFT | Mean ITL | Peak memory | KV/request |
+|---|---:|---:|---:|---:|---:|
+| Qwen2.5-0.5B | 46.5-284.7 tok/s | 20.2-3,779.6 ms | 19.7-53.0 ms | 1,005-2,278 MB | 1.11-6.36 MB |
+| Qwen2.5-1.5B | 42.1-248.0 tok/s | 24.1-4,100.8 ms | 22.7-59.7 ms | 3,005-4,409 MB | 2.60-14.85 MB |
+
+## Qwen2.5-0.5B Plots
 
 ![Throughput](assets/runpod/throughput.png)
 
@@ -102,33 +124,35 @@ Measured range across all 54 workloads:
 
 ![Peak GPU memory](assets/runpod/peak_memory.png)
 
+## Qwen2.5-1.5B Plots
+
+![Throughput](assets/runpod_qwen_1_5b/throughput.png)
+
+![Time to first token](assets/runpod_qwen_1_5b/ttft.png)
+
+![Inter-token latency](assets/runpod_qwen_1_5b/itl.png)
+
+![KV-cache scaling](assets/runpod_qwen_1_5b/kv_cache_scaling.png)
+
+![Peak GPU memory](assets/runpod_qwen_1_5b/peak_memory.png)
+
 ## Observations
 
 - Batching dominates throughput. Moving from batch size 1 to batch size 8 raised
-  throughput from about 50 tokens/sec to about 280-293 tokens/sec on this model.
+  throughput from about 50 tokens/sec to 280+ tokens/sec on Qwen2.5-0.5B, and
+  from about 42 tokens/sec to 240+ tokens/sec on Qwen2.5-1.5B.
 - TTFT grows with queue depth when concurrency exceeds the active batch capacity.
   For prompt length 512, batch size 8, and concurrency 16, mean TTFT was about
-  368 ms because half the requests waited for the first wave.
+  368 ms on Qwen2.5-0.5B and 480 ms on Qwen2.5-1.5B.
 - KV-cache memory scales with prompt length. The measured max KV cache per
-  request increased from 1.11 MB at 64 prompt tokens to 6.36 MB at 512 prompt
-  tokens.
+  request increased from 1.11 MB to 6.36 MB on Qwen2.5-0.5B, and from 2.60 MB
+  to 14.85 MB on Qwen2.5-1.5B.
 - The custom continuous scheduler was competitive when active requests stayed
-  shape-aligned, for example 292.7 tokens/sec versus 289.1 tokens/sec at prompt
-  64, batch 8, concurrency 8.
+  shape-aligned, for example 248.0 tokens/sec versus 241.2 tokens/sec on
+  Qwen2.5-1.5B at prompt 64, batch 8, concurrency 8.
 - The custom continuous scheduler lost throughput when request lengths diverged
   and the Python scheduler split active requests into multiple cache-length
   groups.
-
-## Scope
-
-The benchmark isolates scheduling behavior from specialized serving kernels.
-It measures PyTorch/Hugging Face execution with KV-cache reuse and dynamic
-request admission.
-
-It does not implement paged attention, chunked prefill, CUDA graph capture,
-async CPU/GPU scheduling, request streaming, or production metrics. Treat the
-results as scheduler-level measurements, not as a replacement benchmark for
-vLLM, SGLang, or Hugging Face TGI.
 
 ## References
 

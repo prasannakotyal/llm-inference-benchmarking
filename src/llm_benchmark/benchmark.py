@@ -336,6 +336,39 @@ def summarize_run(
     }
 
 
+def request_trace_rows(
+    workload: Workload,
+    states: list[RequestState],
+    model_name: str,
+) -> list[dict[str, float | int | str | list[float]]]:
+    rows = []
+    for state in states:
+        token_times_ms = [
+            (token_time - state.start_time) * 1000
+            for token_time in state.token_times[: state.target_tokens]
+        ]
+        assert state.first_token_time is not None
+        rows.append(
+            {
+                "model": model_name,
+                "backend": workload.backend,
+                "prompt_length": workload.prompt_length,
+                "batch_size": workload.batch_size,
+                "concurrency": workload.concurrency,
+                "request_id": state.request_id,
+                "prompt_tokens": state.prompt_tokens,
+                "target_tokens": state.target_tokens,
+                "generated_tokens": state.generated_tokens,
+                "ttft_ms": (state.first_token_time - state.start_time) * 1000,
+                "latency_ms": (state.token_times[state.target_tokens - 1] - state.start_time)
+                * 1000,
+                "token_times_ms": token_times_ms,
+                "kv_cache_mb": state.kv_cache_mb,
+            }
+        )
+    return rows
+
+
 def percentile(values: list[float], q: float) -> float:
     assert values
     assert 0 <= q <= 1
@@ -374,7 +407,7 @@ def run_workload(
     device: torch.device,
     model_name: str,
     dtype: str,
-) -> dict[str, float | int | str]:
+) -> tuple[dict[str, float | int | str], list[dict[str, float | int | str | list[float]]]]:
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
     torch.cuda.synchronize(device)
@@ -388,7 +421,7 @@ def run_workload(
     torch.cuda.synchronize(device)
     ended_at = time.perf_counter()
     peak_memory_mb = torch.cuda.max_memory_allocated(device) / 1024 / 1024
-    return summarize_run(
+    summary = summarize_run(
         workload=workload,
         states=states,
         started_at=started_at,
@@ -398,6 +431,7 @@ def run_workload(
         device_name=torch.cuda.get_device_name(device),
         peak_memory_mb=peak_memory_mb,
     )
+    return summary, request_trace_rows(workload, states, model_name)
 
 
 def build_workloads(args: argparse.Namespace) -> list[Workload]:
@@ -421,6 +455,13 @@ def build_workloads(args: argparse.Namespace) -> list[Workload]:
 
 
 def write_jsonl(path: Path, rows: list[dict[str, float | int | str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def write_trace_jsonl(path: Path, rows: list[dict[str, float | int | str | list[float]]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
@@ -452,6 +493,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("results/runpod/benchmark_results.jsonl"),
     )
+    parser.add_argument(
+        "--trace-output",
+        type=Path,
+        default=Path("results/runpod/request_traces.jsonl"),
+    )
     return parser.parse_args()
 
 
@@ -466,16 +512,19 @@ def main() -> None:
         run_workload(model, warmup, vocab_size, device, args.model, args.dtype)
 
     rows = []
+    traces = []
     for workload in build_workloads(args):
         print(
             f"running backend={workload.backend} prompt={workload.prompt_length} "
             f"batch={workload.batch_size} concurrency={workload.concurrency}",
             flush=True,
         )
-        row = run_workload(model, workload, vocab_size, device, args.model, args.dtype)
+        row, trace_rows = run_workload(model, workload, vocab_size, device, args.model, args.dtype)
         rows.append(row)
+        traces.extend(trace_rows)
         write_jsonl(args.output, rows)
         write_csv(args.output.with_suffix(".csv"), rows)
+        write_trace_jsonl(args.trace_output, traces)
 
 
 if __name__ == "__main__":

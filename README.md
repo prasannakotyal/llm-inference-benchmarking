@@ -13,22 +13,6 @@ The project compares two real PyTorch execution paths:
 Recorded RunPod results are included in `results/runpod` and plotted under
 `assets/runpod`.
 
-## Why This Is Useful
-
-The benchmark is meant to answer deployment-oriented questions that come up
-before choosing or tuning an inference stack:
-
-- How much throughput do larger active batches buy on a real GPU?
-- How quickly does TTFT degrade when concurrent requests exceed the active batch
-  capacity?
-- How much does KV-cache memory grow as prompt length increases?
-- When does a simple continuous-admission scheduler help, and when does its
-  Python/cache-management overhead erase the benefit?
-
-This is intentionally not a toy "hello world" generation script. It records
-per-workload JSONL/CSV metrics, includes reproducible RunPod commands, measures
-latency and memory directly, and keeps the negative results visible.
-
 ## Install
 
 ```bash
@@ -118,7 +102,7 @@ Measured range across all 54 workloads:
 
 ![Peak GPU memory](assets/runpod/peak_memory.png)
 
-## Findings
+## Observations
 
 - Batching dominates throughput. Moving from batch size 1 to batch size 8 raised
   throughput from about 50 tokens/sec to about 280-293 tokens/sec on this model.
@@ -133,22 +117,18 @@ Measured range across all 54 workloads:
   64, batch 8, concurrency 8.
 - The custom continuous scheduler lost throughput when request lengths diverged
   and the Python scheduler split active requests into multiple cache-length
-  groups. That is an implementation finding, not an indictment of production
-  continuous batching systems.
+  groups.
 
-## Notes
+## Scope
 
-The benchmark intentionally separates scheduling behavior from specialized
-serving kernels. This makes the experiment small enough to reproduce on a
-single RunPod container while still measuring the core deployment tradeoff:
-static batches keep execution simple, while continuous admission reduces queue
-waiting when requests have uneven decode lengths.
+The benchmark isolates scheduling behavior from specialized serving kernels.
+It measures PyTorch/Hugging Face execution with KV-cache reuse and dynamic
+request admission.
 
-Production serving stacks add optimizations this benchmark does not implement:
-paged attention, chunked prefill, CUDA graph capture, async CPU/GPU scheduling,
-request streaming, and production metrics. The README therefore reports this as
-a Hugging Face/PyTorch scheduler benchmark, not as a replacement for vLLM,
-SGLang, or Hugging Face TGI.
+It does not implement paged attention, chunked prefill, CUDA graph capture,
+async CPU/GPU scheduling, request streaming, or production metrics. Treat the
+results as scheduler-level measurements, not as a replacement benchmark for
+vLLM, SGLang, or Hugging Face TGI.
 
 ## References
 
